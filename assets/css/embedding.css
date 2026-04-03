@@ -110,6 +110,29 @@ textarea {
   color: var(--muted);
 }
 
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.field-label-row label {
+  margin-bottom: 0;
+}
+
+.field-link {
+  color: var(--primary);
+  font-size: 12px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.field-link:hover {
+  text-decoration: underline;
+}
+
 .field input {
   height: 44px;
 }

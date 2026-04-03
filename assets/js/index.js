@@ -24,9 +24,10 @@ const SEARCHABLE_COLUMNS = COLUMN_DEFS.filter(col => !['id', '__score'].includes
 const SEMANTIC_COLUMNS = new Set(COLUMN_DEFS.filter(col => col.semantic).map(col => col.key));
 
 const STORAGE_KEY_VISIBLE = 'notion_csv_visible_columns_v1';
-const STORAGE_KEY_THRESHOLD = 'notion_csv_default_threshold_v1';
+const STORAGE_KEY_THRESHOLD = 'notion_csv_default_threshold_v2';
 const STORAGE_KEY_GLOBAL_SEARCH = 'notion_csv_global_search_v1';
 const STORAGE_KEY_SORT = 'notion_csv_sort_column_v1';
+const DEFAULT_SEMANTIC_THRESHOLD = 0.30;
 
 let rawData = [];
 let embeddingMap = new Map();
@@ -38,6 +39,7 @@ let sortColumnKey = loadSortColumn();
 let globalSearchTimer = null;
 let openColumnMenu = null;
 let openPropertiesMenu = false;
+let openSortMenu = false;
 let openSearchMenu = false;
 let queryVectors = {};
 let filteredRows = [];
@@ -63,10 +65,11 @@ const els = {
   reloadBtn: document.getElementById('reloadBtn'),
   clearBtn: document.getElementById('clearBtn'),
   propertiesBtn: document.getElementById('propertiesBtn'),
-  filterBtn: document.getElementById('filterBtn'),
+  sortBtn: document.getElementById('sortBtn'),
   searchBtn: document.getElementById('searchBtn'),
   menuLayer: document.getElementById('menuLayer')
 };
+const MENU_BUTTON_SELECTORS = ['#propertiesBtn', '#sortBtn', '#searchBtn'];
 
 function loadVisibleColumns() {
   try {
@@ -76,8 +79,8 @@ function loadVisibleColumns() {
   return SEARCHABLE_COLUMNS.map(col => col.key);
 }
 function loadDefaultThreshold() {
-  const value = Number(localStorage.getItem(STORAGE_KEY_THRESHOLD) || '0.70');
-  return Number.isFinite(value) ? Math.min(0.95, Math.max(0.3, value)) : 0.70;
+  const value = Number(localStorage.getItem(STORAGE_KEY_THRESHOLD) || String(DEFAULT_SEMANTIC_THRESHOLD));
+  return Number.isFinite(value) ? Math.min(0.95, Math.max(0.3, value)) : DEFAULT_SEMANTIC_THRESHOLD;
 }
 function loadGlobalSearch() {
   return localStorage.getItem(STORAGE_KEY_GLOBAL_SEARCH) || '';
@@ -94,11 +97,36 @@ function saveSortColumn() {
   else localStorage.removeItem(STORAGE_KEY_SORT);
 }
 function setStatus(text) { els.status.textContent = text; }
+function closeAllMenus() {
+  openColumnMenu = null;
+  openPropertiesMenu = false;
+  openSortMenu = false;
+  openSearchMenu = false;
+}
+function hasOpenMenu() {
+  return !!(openColumnMenu || openPropertiesMenu || openSortMenu || openSearchMenu);
+}
+function toggleToolbarMenu(menuKey) {
+  const wasOpen = menuKey === 'properties' ? openPropertiesMenu
+    : menuKey === 'sort' ? openSortMenu
+    : openSearchMenu;
+  closeAllMenus();
+  if (menuKey === 'properties') openPropertiesMenu = !wasOpen;
+  if (menuKey === 'sort') openSortMenu = !wasOpen;
+  if (menuKey === 'search') openSearchMenu = !wasOpen;
+}
+function renderUI() {
+  renderHeader();
+  renderBody();
+  renderMenus();
+  updateToolbarState();
+}
 
 function escapeHtml(str = '') {
   return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 function normalizeText(value) { return String(value ?? '').replace(/\s+/g, ' ').trim(); }
+function cleanCellText(value) { return String(value ?? '').trim(); }
 function isVisible(key) { return key === 'id' || key === '__score' || visibleColumns.includes(key); }
 function getColumnLabel(key) { return COLUMN_DEFS.find(col => col.key === key)?.label || key; }
 function hasActiveSemanticQuery(key) { return SEMANTIC_COLUMNS.has(key) && !!normalizeText(columnState[key]?.query); }
@@ -184,7 +212,7 @@ function parseEmbeddingCell(value) {
 function parseDataCsv(text) {
   const objects = rowsToObjects(parseCSV(text)).map(item => {
     const row = {};
-    for (const col of REQUIRED_DATA_COLUMNS) row[col] = normalizeText(item[col] ?? '');
+    for (const col of REQUIRED_DATA_COLUMNS) row[col] = cleanCellText(item[col] ?? '');
     return row;
   });
   validateDataColumns(objects);
@@ -233,7 +261,7 @@ async function loadCsvData() {
   if (sortColumnKey && !hasActiveSemanticQuery(sortColumnKey)) sortColumnKey = '';
   filteredRows = rawData.map(row => ({ ...row, __semanticScores: {} }));
   updateSummary();
-  renderHeader(); renderBody(); renderMenus(); updateToolbarState();
+  renderUI();
 
   const linked = Array.from(embeddingMap.values()).filter(item => EMBEDDING_COLUMNS.some(col => Array.isArray(item[col]) && item[col].length)).length;
   if (embeddingResult.status === 'fulfilled') {
@@ -258,12 +286,6 @@ async function embedQuery(text) {
   const output = await extractor(normalized, { pooling: 'mean', normalize: true });
   return typeof output.tolist === 'function' ? output.tolist()[0] : Array.from(output.data || []);
 }
-async function ensureQueryVector(columnKey) {
-  if (!SEMANTIC_COLUMNS.has(columnKey)) return;
-  const query = normalizeText(columnState[columnKey]?.query);
-  if (!query) { delete queryVectors[columnKey]; return; }
-  queryVectors[columnKey] = await embedQuery(query);
-}
 
 function getRenderedColumns() { return COLUMN_DEFS.filter(col => isVisible(col.key)); }
 function renderHeader() {
@@ -273,9 +295,10 @@ function renderHeader() {
     btn.addEventListener('click', (event) => {
       event.stopPropagation();
       const key = btn.dataset.colHead;
-      openPropertiesMenu = false; openSearchMenu = false;
+      closeAllMenus();
       openColumnMenu = openColumnMenu === key ? null : key;
-      renderMenus(); updateToolbarState();
+      renderMenus();
+      updateToolbarState();
     });
   });
 }
@@ -348,8 +371,8 @@ function updateSummary() {
 }
 function updateToolbarState() {
   els.propertiesBtn.classList.toggle('active', openPropertiesMenu);
+  els.sortBtn.classList.toggle('active', openSortMenu);
   els.searchBtn.classList.toggle('active', openSearchMenu);
-  els.filterBtn.classList.toggle('active', !!getActiveFilters().length);
 }
 function anchorPosition(rect, width = 320) {
   const margin = 8; let left = rect.left, top = rect.bottom + 6;
@@ -362,6 +385,7 @@ function renderMenus() {
   const parts = [];
   if (openColumnMenu) parts.push(renderColumnMenu(openColumnMenu));
   if (openPropertiesMenu) parts.push(renderPropertiesMenu());
+  if (openSortMenu) parts.push(renderSortMenu());
   if (openSearchMenu) parts.push(renderSearchMenu());
   els.menuLayer.innerHTML = parts.join('');
   bindMenuEvents();
@@ -401,7 +425,20 @@ function renderPropertiesMenu() {
         ${SEARCHABLE_COLUMNS.map(col => `<label class="menu-check"><span class="left"><input type="checkbox" data-role="visible-column" data-column="${escapeHtml(col.key)}" ${isVisible(col.key) ? 'checked' : ''} /><span>${escapeHtml(col.label)}</span></span><span class="right">${col.semantic ? '语义' : '文本'}</span></label>`).join('')}
       </div>
       <div class="menu-section">
-        <label class="menu-label">关联性排序</label>
+        <label class="menu-label">默认语义阈值</label>
+        <div class="menu-range-wrap">
+          <input class="menu-range" id="defaultThresholdRange" type="range" min="0.30" max="0.95" step="0.01" value="${defaultSemanticThreshold.toFixed(2)}" />
+          <span class="menu-range-value" id="defaultThresholdValue">${defaultSemanticThreshold.toFixed(2)}</span>
+        </div>
+      </div>
+    </div>`;
+}
+function renderSortMenu() {
+  const rect = els.sortBtn.getBoundingClientRect(), pos = anchorPosition(rect, 320);
+  return `
+    <div class="menu" style="left:${pos.left}px; top:${pos.top}px">
+      <div class="menu-title">关联性排序</div>
+      <div class="menu-section">
         <label class="menu-check"><span class="left"><input type="radio" name="sort-column" data-role="sort-column" value="" ${!sortColumnKey ? 'checked' : ''} /><span>不排序</span></span><span class="right">原顺序</span></label>
         ${EMBEDDING_COLUMNS.map(key => {
           const active = hasActiveSemanticQuery(key) && !!queryVectors[key];
@@ -410,13 +447,6 @@ function renderPropertiesMenu() {
           const hint = active ? '可用' : '先填搜索词';
           return `<label class="menu-check ${active ? '' : 'disabled'}"><span class="left"><input type="radio" name="sort-column" data-role="sort-column" value="${escapeHtml(key)}" ${checked} ${disabled} /><span>${escapeHtml(getColumnLabel(key))}</span></span><span class="right">${hint}</span></label>`;
         }).join('')}
-      </div>
-      <div class="menu-section">
-        <label class="menu-label">默认语义阈值</label>
-        <div class="menu-range-wrap">
-          <input class="menu-range" id="defaultThresholdRange" type="range" min="0.30" max="0.95" step="0.01" value="${defaultSemanticThreshold.toFixed(2)}" />
-          <span class="menu-range-value" id="defaultThresholdValue">${defaultSemanticThreshold.toFixed(2)}</span>
-        </div>
       </div>
     </div>`;
 }
@@ -553,11 +583,9 @@ function toggleVisibleColumn(columnKey, forceVisible) {
     if (sortColumnKey === columnKey) { sortColumnKey = ''; saveSortColumn(); }
   }
   visibleColumns = SEARCHABLE_COLUMNS.map(col => col.key).filter(key => visibleColumns.includes(key));
-  saveVisibleColumns(); renderHeader(); renderBody(); renderMenus(); updateToolbarState(); updateSummary();
-}
-function debounce(fn, delay) {
-  let timer = null;
-  return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), delay); };
+  saveVisibleColumns();
+  updateSummary();
+  renderUI();
 }
 
 async function applyFilters() {
@@ -634,17 +662,27 @@ async function applyFilters() {
 }
 
 function clearAllFilters() {
-  for (const def of SEARCHABLE_COLUMNS) { columnState[def.key].query = ''; columnState[def.key].threshold = defaultSemanticThreshold; columnDraftState[def.key] = ''; }
-  queryVectors = {}; globalSearchValue = ''; sortColumnKey = ''; saveGlobalSearch(); saveSortColumn();
-  openColumnMenu = null; openPropertiesMenu = false; openSearchMenu = false;
+  for (const def of SEARCHABLE_COLUMNS) {
+    columnState[def.key].query = '';
+    columnState[def.key].threshold = defaultSemanticThreshold;
+    columnDraftState[def.key] = '';
+  }
+  queryVectors = {};
+  globalSearchValue = '';
+  sortColumnKey = '';
+  saveGlobalSearch();
+  saveSortColumn();
+  closeAllMenus();
   filteredRows = rawData.map(row => ({ ...row, __semanticScores: {} }));
-  updateSummary(); renderHeader(); renderBody(); renderMenus(); updateToolbarState();
+  updateSummary();
+  renderUI();
   setStatus('已清空所有筛选。');
 }
 function closeMenus() {
-  if (!openColumnMenu && !openPropertiesMenu && !openSearchMenu) return;
-  openColumnMenu = null; openPropertiesMenu = false; openSearchMenu = false;
-  renderMenus(); updateToolbarState();
+  if (!hasOpenMenu()) return;
+  closeAllMenus();
+  renderMenus();
+  updateToolbarState();
 }
 
 els.initBtn.addEventListener('click', async () => {
@@ -656,16 +694,14 @@ els.reloadBtn.addEventListener('click', async () => {
   catch (error) { setStatus(error.message); }
 });
 els.clearBtn.addEventListener('click', clearAllFilters);
-els.propertiesBtn.addEventListener('click', (event) => { event.stopPropagation(); openColumnMenu = null; openSearchMenu = false; openPropertiesMenu = !openPropertiesMenu; renderMenus(); updateToolbarState(); });
-els.searchBtn.addEventListener('click', (event) => { event.stopPropagation(); openColumnMenu = null; openPropertiesMenu = false; openSearchMenu = !openSearchMenu; renderMenus(); updateToolbarState(); });
-els.filterBtn.addEventListener('click', (event) => { event.stopPropagation(); const firstActive = getActiveFilters()[0]?.key || null; openPropertiesMenu = false; openSearchMenu = false; openColumnMenu = firstActive; renderMenus(); updateToolbarState(); });
+els.propertiesBtn.addEventListener('click', (event) => { event.stopPropagation(); toggleToolbarMenu('properties'); renderMenus(); updateToolbarState(); });
+els.sortBtn.addEventListener('click', (event) => { event.stopPropagation(); toggleToolbarMenu('sort'); renderMenus(); updateToolbarState(); });
+els.searchBtn.addEventListener('click', (event) => { event.stopPropagation(); toggleToolbarMenu('search'); renderMenus(); updateToolbarState(); });
 
 document.addEventListener('click', (event) => {
   if (event.target.closest('.menu')) return;
   if (event.target.closest('[data-col-head]')) return;
-  if (event.target.closest('#propertiesBtn')) return;
-  if (event.target.closest('#searchBtn')) return;
-  if (event.target.closest('#filterBtn')) return;
+  if (MENU_BUTTON_SELECTORS.some(selector => event.target.closest(selector))) return;
   closeMenus();
 });
 document.addEventListener('keydown', (event) => { if (event.key === 'Escape') closeMenus(); });
@@ -675,10 +711,7 @@ document.querySelector('.table-wrap').addEventListener('scroll', closeMenus);
 async function bootstrap() {
   filteredRows = [];
   updateSummary();
-  renderHeader();
-  renderBody();
-  renderMenus();
-  updateToolbarState();
+  renderUI();
   try {
     await loadCsvData();
     await applyFilters();

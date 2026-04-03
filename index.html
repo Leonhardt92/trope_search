@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Notion 风格语义表格 - CSV 驱动版</title>
+  <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg" />
   <link rel="stylesheet" href="./assets/css/index.css" />
 </head>
 <body>
@@ -12,26 +13,21 @@
       <div class="db-header">
         <div class="db-title-row">
           <div class="db-title">桥段库</div>
-          <div class="db-chip">Notion 风格</div>
-          <div class="db-chip">CSV 驱动</div>
-          <div class="db-chip">Xenova/bge-small-zh-v1.5</div>
-          <div class="db-chip">可隐藏列</div>
+          <div class="db-title-spacer"></div>
+          <a class="tool-btn tool-link header-link" href="./embedding.html">↗ Embedding 生成</a>
         </div>
         <div class="db-subtitle">
           点击表头可打开该列菜单并只筛这一列；右上角“属性”可以隐藏或显示列。
           页面启动时会固定读取同目录下的 <span class="mono-inline">data.csv</span> 和 <span class="mono-inline">embeddings.csv</span>，
           不再把数据写在 HTML 常量里。
         </div>
-        <div class="view-tabs">
-          <button class="view-tab active">表格视图</button>
-        </div>
       </div>
 
       <div class="toolbar">
         <div class="toolbar-left">
           <button class="tool-btn" id="searchBtn">⌘ 搜索</button>
-          <button class="tool-btn" id="filterBtn">⎇ 筛选列</button>
           <button class="tool-btn" id="propertiesBtn">☰ 属性</button>
+          <button class="tool-btn" id="sortBtn">⇅ 排序</button>
           <button class="tool-btn" id="clearBtn">✕ 清空所有筛选</button>
           <button class="tool-btn" id="reloadBtn">↻ 重新读取 CSV</button>
           <button class="tool-btn primary" id="initBtn">⚡ 初始化模型</button>

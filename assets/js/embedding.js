@@ -22,6 +22,7 @@ const FULL_WIDTH_COLUMNS = new Set(['template', 'logline', 'forbidden_elements',
 const TEXTAREA_COLUMNS = new Set(['template', 'logline', 'forbidden_elements', 'self_check', 'examples']);
 const EXCLUDED_EMBEDDING_COLUMNS = new Set(['id', 'forbidden_elements', 'self_check', 'examples']);
 const DEFAULT_EMBEDDING_COLUMNS = new Set(['title', 'template', 'relationship', 'cast_size', 'logline', 'location']);
+const EXAMPLES_STUDIO_URL = 'https://studio.youtube.com/channel/UCFFZ3UHw-WQaxzUJNQST0FA';
 
 let extractor = null;
 
@@ -88,13 +89,25 @@ function renderFields() {
   for (const { key, label } of COLUMN_DEFS) {
     const wrap = document.createElement('div');
     wrap.className = 'field' + (FULL_WIDTH_COLUMNS.has(key) ? ' full' : '');
+    const labelRow = document.createElement('div');
+    labelRow.className = 'field-label-row';
     const fieldLabel = document.createElement('label');
     fieldLabel.textContent = label;
+    labelRow.appendChild(fieldLabel);
+    if (key === 'examples') {
+      const link = document.createElement('a');
+      link.className = 'field-link';
+      link.href = EXAMPLES_STUDIO_URL;
+      link.target = '_blank';
+      link.rel = 'noreferrer';
+      link.textContent = '打开 YouTube Studio';
+      labelRow.appendChild(link);
+    }
     const input = document.createElement(TEXTAREA_COLUMNS.has(key) ? 'textarea' : 'input');
     if (input.tagName === 'INPUT') input.type = 'text';
     input.value = '';
     input.rows = 3;
-    wrap.appendChild(fieldLabel);
+    wrap.appendChild(labelRow);
     wrap.appendChild(input);
     els.fieldGrid.appendChild(wrap);
     fieldInputs.set(key, input);
@@ -136,9 +149,8 @@ function getCurrentRecord() {
 }
 
 function buildDataCSV(row) {
-  const header = COLUMNS.join(',');
   const data = COLUMNS.map(col => escapeCSV(row[col])).join(',');
-  return header + '\n' + data;
+  return data;
 }
 
 async function initModel() {
@@ -171,7 +183,6 @@ async function buildEmbeddingCSV(row) {
   }
   if (!selected.length) throw new Error('至少要勾选一列用于 embedding。');
 
-  const header = ['id', ...selected.map(col => `${col}__embedding`)];
   const values = [escapeCSV(row.id)];
 
   for (const col of selected) {
@@ -180,7 +191,7 @@ async function buildEmbeddingCSV(row) {
     values.push(escapeCSV(vec));
   }
 
-  return header.join(',') + '\n' + values.join(',');
+  return values.join(',');
 }
 
 async function copyText(text) {

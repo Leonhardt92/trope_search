@@ -19,11 +19,13 @@
 html, body { margin: 0; padding: 0; background: var(--page); color: var(--text); font-family: var(--sans); }
 body { min-height: 100vh; }
 button, input, textarea { font: inherit; }
+a { color: inherit; }
 .page { max-width: 100%; padding: 24px 28px 48px; }
 .db-shell { background: var(--bg); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; box-shadow: 0 1px 2px rgba(15, 15, 15, 0.03); }
 .db-header { padding: 20px 20px 10px; border-bottom: 1px solid var(--line); background: linear-gradient(to bottom, #ffffff, #fcfcfb); }
 .db-title-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
 .db-title { font-size: 30px; font-weight: 700; line-height: 1.2; letter-spacing: -0.01em; }
+.db-title-spacer { flex: 1 1 auto; }
 .db-chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 999px; background: var(--blue-soft); color: var(--blue); font-size: 12px; font-weight: 600; }
 .db-subtitle { font-size: 14px; color: var(--muted); line-height: 1.7; }
 .mono-inline { font-family: var(--mono); }
@@ -33,8 +35,14 @@ button, input, textarea { font: inherit; }
 .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 16px; border-bottom: 1px solid var(--line); background: #fff; flex-wrap: wrap; }
 .toolbar-left, .toolbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .tool-btn { height: 32px; padding: 0 10px; border: 0; background: transparent; color: var(--muted); border-radius: 8px; display: inline-flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+.tool-link { text-decoration: none; }
 .tool-btn:hover, .tool-btn.active { background: var(--hover); color: var(--text); }
 .tool-btn.primary { color: var(--blue); background: var(--blue-soft); }
+.header-link {
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--text);
+}
 .status { font-size: 12px; color: var(--muted); }
 .summary-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 16px; background: #fff; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--muted); flex-wrap: wrap; }
 .summary-left, .summary-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
