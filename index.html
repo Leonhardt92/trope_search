@@ -18,7 +18,7 @@
         </div>
         <div class="db-subtitle">
           点击表头可打开该列菜单并只筛这一列；右上角“属性”可以隐藏或显示列。
-          页面启动时会固定读取同目录下的 <span class="mono-inline">data.csv</span> 和 <span class="mono-inline">embeddings.csv</span>，
+          页面启动时会固定读取 <span class="mono-inline">data/data.csv</span> 和 <span class="mono-inline">data/embeddings.csv</span>，
           不再把数据写在 HTML 常量里。
         </div>
       </div>
@@ -33,7 +33,7 @@
           <button class="tool-btn primary" id="initBtn">⚡ 初始化模型</button>
         </div>
         <div class="toolbar-right">
-          <span class="status" id="status">正在读取 data.csv ...</span>
+          <span class="status" id="status">正在读取 data/data.csv ...</span>
         </div>
       </div>
 
@@ -45,7 +45,7 @@
           <span class="tiny-pill blue" id="devicePill">模型未初始化</span>
         </div>
         <div class="summary-right">
-          <span id="hintText">固定读取 data.csv + embeddings.csv；embeddings.csv 需要填入真实向量；语义列：标题 / 空白模板 / 角色关系 / 人数 / 一句话定义 / 地点</span>
+          <span id="hintText">固定读取 data/data.csv + data/embeddings.csv；embeddings.csv 需要填入真实向量；语义列：标题 / 空白模板 / 角色关系 / 人数 / 一句话定义 / 地点</span>
         </div>
       </div>
 

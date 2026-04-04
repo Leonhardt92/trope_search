@@ -23,6 +23,7 @@ const TEXTAREA_COLUMNS = new Set(['template', 'logline', 'forbidden_elements', '
 const EXCLUDED_EMBEDDING_COLUMNS = new Set(['id', 'forbidden_elements', 'self_check', 'examples']);
 const DEFAULT_EMBEDDING_COLUMNS = new Set(['title', 'template', 'relationship', 'cast_size', 'logline', 'location']);
 const EXAMPLES_STUDIO_URL = 'https://studio.youtube.com/channel/UCFFZ3UHw-WQaxzUJNQST0FA';
+const DATA_CSV_URL = './data/data.csv';
 
 let extractor = null;
 
@@ -82,6 +83,21 @@ function escapeCSV(value) {
     return '"' + s.replace(/"/g, '""') + '"';
   }
   return s;
+}
+
+async function fetchNextId() {
+  const response = await fetch(DATA_CSV_URL, { cache: 'no-store' });
+  if (!response.ok) throw new Error(`无法读取 ${DATA_CSV_URL}（${response.status}）`);
+  const text = await response.text();
+  const lines = text.split(/\r?\n/).filter(Boolean);
+  if (lines.length <= 1) return '1';
+
+  let maxId = 0;
+  for (const line of lines.slice(1)) {
+    const id = Number(parseCSVLine(line)[0]);
+    if (Number.isFinite(id)) maxId = Math.max(maxId, id);
+  }
+  return String(maxId + 1);
 }
 
 function renderFields() {
@@ -200,8 +216,6 @@ async function copyText(text) {
 
 renderFields();
 renderCheckboxes();
-els.rawLine.value = EXAMPLE_LINE;
-try { setFieldsFromLine(EXAMPLE_LINE); } catch {}
 
 els.fillExampleBtn.addEventListener('click', () => {
   els.rawLine.value = EXAMPLE_LINE;
@@ -227,7 +241,10 @@ els.parseBtn.addEventListener('click', () => {
 els.generateBtn.addEventListener('click', async () => {
   try {
     const row = getCurrentRecord();
-    if (!row.id) throw new Error('id 不能为空。');
+    if (!row.id) {
+      row.id = await fetchNextId();
+      fieldInputs.get('id').value = row.id;
+    }
     els.dataOutput.value = buildDataCSV(row);
     els.embOutput.value = '';
     setStatus('data.csv 已生成，正在生成 embeddings.csv ……');

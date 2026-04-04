@@ -1,8 +1,8 @@
 import { pipeline, env } from 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.0.0';
 
 const MODEL_ID = 'Xenova/bge-small-zh-v1.5';
-const DATA_CSV_URL = './data.csv';
-const EMBEDDINGS_CSV_URL = './embeddings.csv';
+const DATA_CSV_URL = './data/data.csv';
+const EMBEDDINGS_CSV_URL = './data/embeddings.csv';
 env.allowLocalModels = false;
 
 const COLUMN_DEFS = [
@@ -10,12 +10,12 @@ const COLUMN_DEFS = [
   { key: '__score', label: '得分', semantic: false, fixed: true, widthClass: 'col-score' },
   { key: 'title', label: '标题', semantic: true, widthClass: 'col-title' },
   { key: 'template', label: '空白模板', semantic: true, widthClass: 'col-template' },
-  { key: 'relationship', label: '角色关系', semantic: true },
-  { key: 'cast_size', label: '人数', semantic: true },
-  { key: 'logline', label: '一句话定义', semantic: true },
-  { key: 'location', label: '地点', semantic: true },
-  { key: 'forbidden_elements', label: '禁止使用元素', semantic: false },
-  { key: 'self_check', label: '自检问题', semantic: false },
+  { key: 'relationship', label: '角色关系', semantic: true, widthClass: 'col-relationship' },
+  { key: 'cast_size', label: '人数', semantic: true, widthClass: 'col-cast-size' },
+  { key: 'logline', label: '一句话定义', semantic: true, widthClass: 'col-logline' },
+  { key: 'location', label: '地点', semantic: true, widthClass: 'col-location' },
+  { key: 'forbidden_elements', label: '禁止使用元素', semantic: false, widthClass: 'col-forbidden' },
+  { key: 'self_check', label: '自检问题', semantic: false, widthClass: 'col-self-check' },
   { key: 'examples', label: '示例', semantic: false, widthClass: 'col-example' }
 ];
 const REQUIRED_DATA_COLUMNS = ['id', 'title', 'template', 'relationship', 'cast_size', 'logline', 'location', 'forbidden_elements', 'self_check', 'examples'];
@@ -24,10 +24,10 @@ const SEARCHABLE_COLUMNS = COLUMN_DEFS.filter(col => !['id', '__score'].includes
 const SEMANTIC_COLUMNS = new Set(COLUMN_DEFS.filter(col => col.semantic).map(col => col.key));
 
 const STORAGE_KEY_VISIBLE = 'notion_csv_visible_columns_v1';
-const STORAGE_KEY_THRESHOLD = 'notion_csv_default_threshold_v2';
+const STORAGE_KEY_THRESHOLD = 'notion_csv_default_threshold_v4';
 const STORAGE_KEY_GLOBAL_SEARCH = 'notion_csv_global_search_v1';
 const STORAGE_KEY_SORT = 'notion_csv_sort_column_v1';
-const DEFAULT_SEMANTIC_THRESHOLD = 0.30;
+const DEFAULT_SEMANTIC_THRESHOLD = 0.5;
 
 let rawData = [];
 let embeddingMap = new Map();
@@ -45,7 +45,7 @@ let queryVectors = {};
 let filteredRows = [];
 let isApplying = false;
 
-const TAG_STYLE_COLUMNS = new Set(['relationship', 'cast_size', 'location', 'forbidden_elements']);
+const TAG_STYLE_COLUMNS = new Set(['relationship', 'cast_size', 'location', 'forbidden_elements', 'self_check']);
 const columnDraftState = Object.fromEntries(SEARCHABLE_COLUMNS.map(col => [col.key, '']));
 
 const columnState = Object.fromEntries(SEARCHABLE_COLUMNS.map(col => [col.key, {
@@ -80,7 +80,7 @@ function loadVisibleColumns() {
 }
 function loadDefaultThreshold() {
   const value = Number(localStorage.getItem(STORAGE_KEY_THRESHOLD) || String(DEFAULT_SEMANTIC_THRESHOLD));
-  return Number.isFinite(value) ? Math.min(0.95, Math.max(0.3, value)) : DEFAULT_SEMANTIC_THRESHOLD;
+  return Number.isFinite(value) ? Math.min(0.95, Math.max(0, value)) : DEFAULT_SEMANTIC_THRESHOLD;
 }
 function loadGlobalSearch() {
   return localStorage.getItem(STORAGE_KEY_GLOBAL_SEARCH) || '';
@@ -354,9 +354,11 @@ function renderCellValue(columnKey, value) {
       return `<div class="video-item">${embed ? `<div class="video-frame"><iframe src="${escapeHtml(embed)}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>` : ''}<a class="video-link" href="${escapeHtml(link)}" target="_blank" rel="noreferrer">${escapeHtml(link)}</a></div>`;
     }).join('')}</div>`;
   }
-  const tags = TAG_STYLE_COLUMNS.has(columnKey) || /[|｜;；]/.test(String(value || '')) ? splitTagValues(value) : [];
+  const tags = TAG_STYLE_COLUMNS.has(columnKey) ? splitTagValues(value) : [];
   if (tags.length) {
-    return `<div class="tag-list">${tags.map(tag => `<span class="tag-chip ${TAG_STYLE_COLUMNS.has(columnKey) ? '' : 'soft'}">${escapeHtml(tag)}</span>`).join('')}</div>`;
+    const listClass = columnKey === 'forbidden_elements' ? 'tag-list tag-list-block' : 'tag-list';
+    const chipClass = columnKey === 'forbidden_elements' ? 'tag-chip tag-chip-block' : `tag-chip ${TAG_STYLE_COLUMNS.has(columnKey) ? '' : 'soft'}`.trim();
+    return `<div class="${listClass}">${tags.map(tag => `<span class="${chipClass}">${escapeHtml(tag)}</span>`).join('')}</div>`;
   }
   return `<div class="cell-text">${escapeHtml(value || '')}</div>`;
 }
@@ -403,7 +405,7 @@ function renderColumnMenu(columnKey) {
         <label class="menu-label">${def.semantic ? '语义搜索' : '关键词搜索'}</label>
         ${def.semantic ? `<textarea class="menu-textarea" data-role="column-query" data-column="${escapeHtml(columnKey)}" placeholder="只搜索这一列">${escapeHtml(draft)}</textarea>` : `<input class="menu-input" data-role="column-query" data-column="${escapeHtml(columnKey)}" type="search" placeholder="只搜索这一列" value="${escapeHtml(draft)}" />`}
       </div>
-      ${def.semantic ? `<div class="menu-section"><label class="menu-label">相似度阈值</label><div class="menu-range-wrap"><input class="menu-range" data-role="column-threshold" data-column="${escapeHtml(columnKey)}" type="range" min="0.30" max="0.95" step="0.01" value="${state.threshold.toFixed(2)}" /><span class="menu-range-value" data-role="column-threshold-value" data-column="${escapeHtml(columnKey)}">${state.threshold.toFixed(2)}</span></div></div>` : ''}
+      ${def.semantic ? `<div class="menu-section"><label class="menu-label">相似度阈值</label><div class="menu-range-wrap"><input class="menu-range" data-role="column-threshold" data-column="${escapeHtml(columnKey)}" type="range" min="0" max="0.95" step="0.01" value="${state.threshold.toFixed(2)}" /><span class="menu-range-value" data-role="column-threshold-value" data-column="${escapeHtml(columnKey)}">${state.threshold.toFixed(2)}</span></div></div>` : ''}
       <div class="menu-section">
         <div class="menu-actions">
           <button class="menu-item primary" data-role="apply-column-filter" data-column="${escapeHtml(columnKey)}">应用搜索</button>
@@ -427,7 +429,7 @@ function renderPropertiesMenu() {
       <div class="menu-section">
         <label class="menu-label">默认语义阈值</label>
         <div class="menu-range-wrap">
-          <input class="menu-range" id="defaultThresholdRange" type="range" min="0.30" max="0.95" step="0.01" value="${defaultSemanticThreshold.toFixed(2)}" />
+          <input class="menu-range" id="defaultThresholdRange" type="range" min="0" max="0.95" step="0.01" value="${defaultSemanticThreshold.toFixed(2)}" />
           <span class="menu-range-value" id="defaultThresholdValue">${defaultSemanticThreshold.toFixed(2)}</span>
         </div>
       </div>
